@@ -1,0 +1,67 @@
+# SungurTrack: Python requirements
+#
+# Target: Raspberry Pi 5, Raspberry Pi OS (Debian 13), Python 3.13, AI HAT+ 2 (Hailo-10H).
+#
+# ---------------------------------------------------------------------------------------
+# 1. System packages (apt), NOT pip
+# ---------------------------------------------------------------------------------------
+# Picamera2/libcamera only work as the apt builds that match the OS's libcamera, and the
+# apt OpenCV and NumPy are what they're built against. Don't pip-install these:
+#
+#   sudo apt install python3-picamera2 python3-opencv python3-numpy python3-yaml python3-psutil
+#
+# Hailo-10H runtime and PCIe driver (version 5.4.0, the version the HEF files are compiled for):
+#
+#   sudo apt install ./hailort_5.4.0_arm64.deb ./hailort-pcie-driver_5.4.0_all.deb
+#
+# Create the venv so it can see the apt packages:
+#
+#   python3 -m venv --system-site-packages .venv
+#
+# ---------------------------------------------------------------------------------------
+# 2. HailoRT Python API (pip, from Hailo's wheel, not on PyPI)
+# ---------------------------------------------------------------------------------------
+# The apt package python3-h10-hailort is 5.1.1 and doesn't match the 5.4.0 runtime, so use
+# the 5.4.0 wheel from Hailo's Developer Zone:
+#
+#   .venv/bin/pip install ~/Downloads/hailort-5.4.0-cp313-cp313-linux_aarch64.whl
+#
+# ---------------------------------------------------------------------------------------
+# 3. pip requirements (perception and benchmarks: what's in use now)
+# ---------------------------------------------------------------------------------------
+# These versions are the tested apt versions, so with a --system-site-packages venv pip sees
+# them as already installed and changes nothing.
+#
+#   .venv/bin/pip install -r requirements.txt
+
+hailort==5.4.0          # installed from the wheel above; this line only checks the version
+numpy==2.2.4            # apt: python3-numpy
+PyYAML==6.0.2           # apt: python3-yaml
+psutil==7.0.0           # apt: python3-psutil
+picamera2==0.3.38       # apt: python3-picamera2 (never from pip)
+# opencv 4.10.0          apt: python3-opencv (no pip metadata, so it can't be listed here)
+
+# ---------------------------------------------------------------------------------------
+# 4. Later phases (uncomment when that phase starts)
+# ---------------------------------------------------------------------------------------
+# Simulator + RL training (Phases 1-5):
+# gymnasium
+# torch
+# stable-baselines3
+# tensorboard
+#
+# Policy export and runtime on the Pi (Phase 6):
+# onnx
+# onnxruntime
+#
+# Actuation, variant A: PCA9685 over I2C (Phase 0):
+# adafruit-circuitpython-pca9685
+# adafruit-blinka
+#
+# Actuation, variant B: ESP32 over UART (Phase 8):
+# pyserial
+#
+# System identification and evaluation (Phases 4, 7):
+# matplotlib
+# pandas
+# scipy
