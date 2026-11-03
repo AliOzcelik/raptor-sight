@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Design complete, hardware partially in hand, implementation starting |
-| **Working name** | RaptorSight (rename under consideration: **SungurTrack**, repo slug `sungur-track`) |
+| **Name** | RaptorSight (repo slug `raptorsight`) |
 | **Author** | Ali Özçelik ([@AliOzcelik](https://github.com/AliOzcelik)) |
 | **Target platform** | Raspberry Pi 5 + AI HAT+ 2 (Hailo-10H NPU) + Pi camera |
 | **Actuation** | 2× hobby servos (pan + tilt), optional ESP32-S3 real-time driver |
@@ -274,7 +274,7 @@ A **well-tuned PID controller** (per axis, with derivative filtering and anti-wi
 ## 10. Repository Structure
 
 ```
-sungur-track/            # or raptorsight/
+raptorsight/
 ├── sim/          # Gymnasium env, servo/camera/latency models, trajectories
 ├── rl/           # training scripts, configs, asymmetric actor-critic
 ├── perception/   # Hailo-10H detector integration, target selection
