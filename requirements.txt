@@ -1,4 +1,4 @@
-# SungurTrack: Python requirements
+# RaptorSight: Python requirements
 #
 # Target: Raspberry Pi 5, Raspberry Pi OS (Debian 13), Python 3.13, AI HAT+ 2 (Hailo-10H).
 #
@@ -41,11 +41,13 @@ psutil==7.0.0           # apt: python3-psutil
 picamera2==0.3.38       # apt: python3-picamera2 (never from pip)
 # opencv 4.10.0          apt: python3-opencv (no pip metadata, so it can't be listed here)
 
+# Simulator (Phase 1, sim/):
+gymnasium==1.2.2
+
 # ---------------------------------------------------------------------------------------
 # 4. Later phases (uncomment when that phase starts)
 # ---------------------------------------------------------------------------------------
-# Simulator + RL training (Phases 1-5):
-# gymnasium
+# RL training (Phases 3-5):
 # torch
 # stable-baselines3
 # tensorboard
