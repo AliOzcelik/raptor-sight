@@ -1,4 +1,6 @@
-# SungurTrack (RaptorSight)
+![RaptorSight: sim-to-real pan-tilt tracking](images/raptorsight-logo-en.png)
+
+# RaptorSight
 
 **Sim-to-real reinforcement learning for real-time pan-tilt object tracking on a Raspberry Pi 5 with the Hailo-10H AI accelerator.**
 
