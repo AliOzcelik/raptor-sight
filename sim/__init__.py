@@ -6,4 +6,4 @@ from sim.config import SimConfig
 from sim.core import BatchSim
 from sim.env import PanTiltEnv
 
-gym.register(id = "SungurTrack/PanTilt-v0", entry_point = "sim.env:PanTiltEnv")
+gym.register(id = "RaptorSight/PanTilt-v0", entry_point = "sim.env:PanTiltEnv")
