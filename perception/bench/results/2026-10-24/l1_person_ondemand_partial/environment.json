@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-10-24T15:38:23",
+  "pcie_link_speed": "8.0 GT/s PCIe",
+  "pcie_link_width": "1",
+  "cpu_governor": "ondemand",
+  "soc_temp": "temp=56.5'C",
+  "throttled": "throttled=0x0",
+  "hailortcli": "HailoRT-CLI version 5.4.0",
+  "firmware": "5.4.0 (release,app)",
+  "kernel": "6.18.50+rpt-rpi-2712",
+  "frames": "/home/desidero/Desktop/sungur_track/perception/bench/data/l1_frames/2026-10-24_person",
+  "n_frames": 1000,
+  "frame_size": [
+    1536,
+    864
+  ],
+  "warmup": 100,
+  "n": 1000,
+  "reps": 3,
+  "conf": 0.35
+}

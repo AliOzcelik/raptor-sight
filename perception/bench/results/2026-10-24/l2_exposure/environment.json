@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-10-24T17:07:54",
+  "pcie_link_speed": "8.0 GT/s PCIe",
+  "pcie_link_width": "1",
+  "cpu_governor": "performance",
+  "soc_temp": "temp=57.6'C",
+  "throttled": "throttled=0x0",
+  "hailortcli": "HailoRT-CLI version 5.4.0",
+  "firmware": "5.4.0 (release,app)",
+  "kernel": "6.18.50+rpt-rpi-2712",
+  "camera": "imx708_noir sensor 1536x864",
+  "fps": [
+    60
+  ],
+  "stream": [
+    "640x360"
+  ],
+  "exposure_us": [
+    0,
+    8000,
+    4000,
+    2000
+  ],
+  "seconds": 20,
+  "conf": 0.35,
+  "rotate180": false,
+  "classes": "all"
+}

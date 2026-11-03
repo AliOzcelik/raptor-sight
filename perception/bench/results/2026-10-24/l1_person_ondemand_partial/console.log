@@ -1,0 +1,15 @@
+WARNING: CPU governor is 'ondemand', the plan fixes it to 'performance'
+1000 frames 1536x864, governor ondemand, PCIe 8.0 GT/s PCIe
+[H1] yolo26n (yolo26, input 640)
+    sync      total p50 19.85 p99 23.97 max 27.70 ms | pre 1.15 infer 18.28 post 0.39 | 50 fps, CPU 50%
+    pipelined total p50 20.03 p99 23.33 max 25.35 ms | pre 1.12 infer 18.51 post 0.42 | 99 fps, CPU 98%
+[H2] yolo26s (yolo26, input 640)
+    sync      total p50 22.79 p99 25.00 max 35.48 ms | pre 1.15 infer 21.25 post 0.39 | 44 fps, CPU 43%
+    pipelined total p50 23.26 p99 25.43 max 29.98 ms | pre 1.15 infer 21.69 post 0.44 | 86 fps, CPU 86%
+[H3] yolov11n (nms, input 640)
+    sync      total p50 17.14 p99 20.97 max 30.79 ms | pre 1.13 infer 15.80 post 0.20 | 58 fps, CPU 52%
+    pipelined total p50 16.94 p99 20.55 max 26.04 ms | pre 1.01 infer 15.68 post 0.18 | 117 fps, CPU 98%
+[H4] yolov11s (nms, input 640)
+    sync      total p50 20.85 p99 24.57 max 32.31 ms | pre 1.13 infer 19.53 post 0.20 | 48 fps, CPU 42%
+
+[exited with code 144]

@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-10-24T14:48:41",
+  "pcie_link_speed": "5.0 GT/s PCIe",
+  "pcie_link_width": "1",
+  "cpu_governor": "ondemand",
+  "soc_temp": "temp=52.7'C",
+  "throttled": "throttled=0x0",
+  "hailortcli": "HailoRT-CLI version 5.4.0",
+  "firmware": "5.4.0 (release,app)",
+  "kernel": "6.18.50+rpt-rpi-2712"
+}

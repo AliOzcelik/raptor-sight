@@ -1,0 +1,27 @@
+# Python environments and caches (rebuilt from requirements.txt)
+.venv/
+venv/
+perception/venv/
+__pycache__/
+*.pyc
+
+# Compiled Hailo models: large, download them from the Hailo Model Zoo (URLs in perception/bench/plan.md)
+*.hef
+
+# Recorded camera frames and raw benchmark data (large, and the frames show people)
+perception/bench/data/
+perception/bench/results/*/*/frames/
+perception/bench/results/*/*/samples/
+perception/bench/results/*/*/system/
+perception/bench/results/*/*/raw/
+
+# Runtime logs and personal test logs
+hailort.log
+*.log
+!perception/bench/results/*/*/console.log
+track*.csv
+*.save
+
+# Unfinished stub (the real tracker is perception/target.py)
+/target.py
+

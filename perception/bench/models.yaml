@@ -1,0 +1,61 @@
+# Detector candidates for the perception benchmark (see measurement plan).
+# hailo: HEF files compiled for Hailo-10H, Model Zoo v5.4.0 (paths relative to repo root).
+# zoo_*: Hailo's published numbers (x86 host, PCIe Gen3 x4) for reference only.
+
+hailo:
+  - id: H1
+    name: yolo26n
+    hef: perception/models/hailo10h/yolo26n.hef
+    zoo_map: 38.6
+    zoo_fps_b1: 233
+  - id: H2
+    name: yolo26s
+    hef: perception/models/hailo10h/yolo26s.hef
+    zoo_map: 45.8
+    zoo_fps_b1: 125
+  - id: H3
+    name: yolov11n
+    hef: perception/models/hailo10h/yolov11n.hef
+    zoo_map: 38.0
+    zoo_fps_b1: 302
+  - id: H4
+    name: yolov11s
+    hef: perception/models/hailo10h/yolov11s.hef
+    zoo_map: 45.5
+    zoo_fps_b1: 142
+  - id: H5
+    name: damoyolo_tinynasL20_T
+    hef: perception/models/hailo10h/damoyolo_tinynasL20_T.hef
+    zoo_map: 42.3
+    zoo_fps_b1: 205
+  - id: H6
+    name: damoyolo_tinynasL25_S
+    hef: perception/models/hailo10h/damoyolo_tinynasL25_S.hef
+    zoo_map: 45.3
+    zoo_fps_b1: 115
+  - id: H7
+    name: yolov8m
+    hef: perception/models/hailo10h/yolov8m.hef
+    zoo_map: 49.2
+    zoo_fps_b1: 76.2
+    dropped_after: L0   # sanity check passed; YOLO11m is more accurate at the same speed
+  - id: H8
+    name: yolov11m
+    hef: perception/models/hailo10h/yolov11m.hef
+    zoo_map: 50.2
+    zoo_fps_b1: 70.6
+    dropped_after: L2   # over the 40 ms budget at every camera rate (47.5 ms p99 at 60 fps from mid-exposure)
+  - id: H9
+    name: nanodet_repvgg
+    hef: perception/models/hailo10h/nanodet_repvgg.hef
+    zoo_map: 28.6
+    zoo_fps_b1: 837
+    note: speed reference only (accuracy too low for the tracker)
+  - id: H10
+    name: yolo26m
+    hef: perception/models/hailo10h/yolo26m.hef
+    zoo_map: 51.0
+    zoo_fps_b1: 58.8
+    dropped_after: L2   # can't keep up with 60 fps and is over budget in every mode
+
+# CPU candidates (C1-C3) and the detect+track hybrid (T1) are added in later steps.

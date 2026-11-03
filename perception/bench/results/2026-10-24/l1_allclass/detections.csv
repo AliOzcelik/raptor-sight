@@ -1,0 +1,8 @@
+model,frames_with_det_pct,mean_dets,recall_vs_ref_pct,precision_vs_ref_pct,matched_iou,classes
+yolo26n,74.1,0.86,45.1,85.3,0.936,person:513 tv:141 cup:76 mouse:47 backpack:30 laptop:27 keyboard:23 remote:1
+yolo26s,76.4,0.97,50.1,84.1,0.958,person:506 laptop:164 cup:109 tv:74 bottle:50 book:24 keyboard:15 mouse:9
+yolov11n,77.6,1.0,46.2,75.1,0.95,person:510 tv:154 toothbrush:109 cup:88 laptop:38 mouse:30 keyboard:28 bed:13
+yolov11s,81.9,1.38,61.6,72.7,0.954,person:507 cup:200 laptop:174 bottle:110 tv:110 remote:61 mouse:51 keyboard:46
+damoyolo_tinynasL20_T,93.1,1.62,61.6,63.7,0.927,person:618 tv:384 laptop:132 cup:124 mouse:70 bottle:44 keyboard:40 backpack:39
+damoyolo_tinynasL25_S,89.4,1.91,74.9,64.0,0.931,person:519 tv:362 cup:210 laptop:144 bottle:109 remote:84 cell phone:81 mouse:74
+nanodet_repvgg,89.4,1.37,51.3,61.1,0.873,person:537 tv:309 cup:183 train:93 laptop:46 keyboard:40 mouse:35 backpack:20

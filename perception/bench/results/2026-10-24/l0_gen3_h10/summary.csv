@@ -1,0 +1,2 @@
+id,model,fps_b1,fps_b8,zoo_fps_b1,fps_b1_vs_zoo,lat_hw_ms,lat_overall_ms,host_overhead_ms,chip_temp_mean_c,chip_temp_max_c,zoo_map
+H10,yolo26m,58.73,58.8,58.8,1.0,16.78,28.55,11.77,47.33,51.23,51.0

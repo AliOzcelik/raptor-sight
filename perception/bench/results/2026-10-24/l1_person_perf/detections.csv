@@ -1,0 +1,10 @@
+model,frames_with_person_pct,mean_persons,agree_with_yolov11m_pct,matched_iou
+yolo26n,50.6,0.51,99.2,0.948
+yolo26s,50.4,0.51,99.0,0.961
+yolov11n,50.7,0.51,99.3,0.955
+yolov11s,50.7,0.51,99.5,0.962
+damoyolo_tinynasL20_T,60.0,0.62,90.2,0.961
+damoyolo_tinynasL25_S,50.8,0.52,99.2,0.961
+yolov11m,50.8,0.52,100.0,1.0
+nanodet_repvgg,51.1,0.54,98.5,0.893
+yolo26m,50.7,0.51,99.3,0.954
