@@ -322,10 +322,15 @@ def main():
     ap.add_argument("--rotate180", action = "store_true", help = "camera mounted upside down")
     ap.add_argument("--exposure-us", type = int, help = "fixed exposure time (default: auto)")
     ap.add_argument("--log", help = "CSV file to write every frame's observation to")
+    ap.add_argument("--target", nargs = "+", metavar = "CLASS",
+                    help = 'only track these COCO classes, e.g. --target person, --target "sports ball" (default: any)')
     args = ap.parse_args()
 
     cfg = Config(rotate180 = args.rotate180, exposure_us = args.exposure_us)
-    tracker = Tracker(TrackerConfig(frame_size = cfg.stream))
+    unknown = [c for c in args.target or () if c not in COCO]
+    if unknown:
+        ap.error(f"unknown class {unknown[0]!r}; COCO classes: {', '.join(COCO)}")
+    tracker = Tracker(TrackerConfig(frame_size = cfg.stream, classes = tuple(COCO.index(c) for c in args.target or ())))
     commands = queue.Queue()            # lock / reset from the window, applied on the worker thread
     latest = queue.Queue(maxsize=1)
     stop = threading.Event()

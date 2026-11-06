@@ -1,0 +1,28 @@
+# RaptorSight: requirements for the training machine (Mac or a PC with a CUDA GPU)
+#
+# Training runs the simulator (sim/), the evaluation (eval/) and the tracker copy (perception/target.py).
+# None of them need the Pi-only packages (Picamera2, libcamera, HailoRT). The Pi only runs the trained
+# policy (requirements.txt).
+#
+#   python3.13 -m venv .venv-train
+#   .venv-train/bin/pip install -r requirements-train.txt
+#
+# Python 3.13, the same as the Pi. NumPy and Gymnasium are pinned to the Pi's versions so the simulator
+# gives the same results on both machines.
+
+numpy==2.2.4
+gymnasium==1.2.2
+
+# PyTorch (2.6 is the first release with Python 3.13 wheels):
+#   Mac:   the default wheel includes Apple-GPU (MPS) support:  pip install "torch>=2.6"
+#   CUDA:  pick the wheel for your CUDA version, e.g.
+#          pip install "torch>=2.6" --index-url https://download.pytorch.org/whl/cu126
+# For a small 2x256 policy the CPU is often as fast as MPS on a Mac; time both once.
+torch>=2.6
+
+# Training logs and exporting the actor for the Pi (ONNX Runtime there):
+tensorboard
+onnx
+
+# Optional: only sim.env's render() needs OpenCV (the simulator itself does not).
+# opencv-python

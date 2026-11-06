@@ -9,8 +9,14 @@ class TrackerConfig:
     gate: float = 0.15                  # otherwise the nearest one within this share of the frame width
     lose_after_s: float = 0.5           # drop the lock after this long without a match
     t_lost_max_s: float = 1.0           # t_lost reaches 1 after this long
-    alpha: float = 0.5                  # alpha-beta filter gains: position
-    beta: float = 0.15                  # velocity
+    alpha: float = 0.8                  # alpha-beta filter gains: position
+    beta: float = 0.5                   # velocity (fast enough for kicked and thrown balls; tested in the sim)
+    jump: float = 0.05                  # a box this share of the frame width off the prediction is a jump:
+                                        # held back until a second box confirms it (one wrong box can't take the lock)
+    jump_speed: float = 2.0             # ... plus this many times the predicted motion since the last match
+                                        # (a ball that bounces back lands 2 v dt off the prediction)
+    confirm_s: float = 0.1              # the confirming box must come within this long
+    classes: tuple = ()                 # COCO class ids to track (e.g. (0,) person, (32,) sports ball); () = any
 
 
 
@@ -58,36 +64,47 @@ class TargetSelector:
     def __init__(self, cfg):
         self.cfg = cfg
         self.centre = np.array(cfg.frame_size, np.float32) / 2
-        self.box = None         # target box in the last frame it was matched
+        self.box = None         # target box in the last frame it was accepted
         self.t_seen_ns = None
         self.new = False
+        self.pending = None     # (box, t_ns) of a jump waiting for a second box to confirm it
 
 
     def lock(self, box):
         """Follow this box (e.g. chosen with a click) from the next frame on"""
-        self.box, self.t_seen_ns, self.new = np.asarray(box, np.float32), None, True
+        self.box, self.t_seen_ns, self.new, self.pending = np.asarray(box, np.float32), None, True, None
 
 
     def reset(self):
         """Forget the target; the next frame picks a new one"""
-        self.box = None
+        self.box, self.pending = None, None
 
 
-    def select(self, boxes, t_ns):
-        """The target's box in this frame (or None) and whether it is a new target"""
+    def select(self, boxes, t_ns, predicted = None):
+        """The candidate target box in this frame (or None) and whether it is a new target. Matches against
+        `predicted` (the last box moved to where the estimator expects it: fast targets), else the last
+        accepted box (a target that turned), else a pending jump. Call accept() if it is taken."""
+        if self.cfg.classes:
+            boxes = boxes[np.isin(boxes[:, 5], self.cfg.classes)]
         if self.box is not None and self.t_seen_ns is not None \
                 and t_ns - self.t_seen_ns > self.cfg.lose_after_s * 1e9:
-            self.box = None                         # lost for too long
+            self.box = self.pending = None          # lost for too long
+        if self.pending is not None and t_ns - self.pending[1] > self.cfg.confirm_s * 1e9:
+            self.pending = None
         if self.box is None:
             box = self.pick(boxes)
             self.new = box is not None
-        else:
-            box = self.match(boxes)
+            return box, self.new
+        box = None if predicted is None else self.match(boxes, predicted)
         if box is None:
-            return None, False
-        new, self.new = self.new, False
-        self.box, self.t_seen_ns = box, t_ns
-        return box, new
+            box = self.match(boxes, self.box)
+        if box is None and self.pending is not None:
+            box = self.match(boxes, self.pending[0])
+        return box, self.new and box is not None
+
+
+    def accept(self, box, t_ns):
+        self.box, self.t_seen_ns, self.new, self.pending = box, t_ns, False, None
 
 
     def pick(self, boxes):
@@ -97,18 +114,24 @@ class TargetSelector:
         return boxes[np.linalg.norm(centres(boxes) - self.centre, axis = 1).argmin()]
 
 
-    def match(self, boxes):
-        """Same-class box that overlaps the last one most, else the nearest one inside the gate"""
-        same = boxes[boxes[:, 5] == self.box[5]]
+    def match(self, boxes, ref):
+        """Same-class box that overlaps ref most, else the nearest one inside the gate"""
+        same = boxes[boxes[:, 5] == ref[5]]
         if len(same) == 0:
             return None
-        overlap = iou(self.box, same)
+        overlap = iou(ref, same)
         if overlap.max() >= self.cfg.min_iou:
             return same[overlap.argmax()]
-        dist = np.linalg.norm(centres(same) - centres(self.box[None])[0], axis = 1)
+        dist = np.linalg.norm(centres(same) - centres(ref[None])[0], axis = 1)
         if dist.min() <= self.cfg.gate * self.cfg.frame_size[0]:
             return same[dist.argmin()]
         return None
+
+
+    def same_object(self, a, b):
+        """Whether box b continues box a (the matching rule of match())"""
+        return bool(iou(a, b[None])[0] >= self.cfg.min_iou or
+                    np.linalg.norm(centres(a[None])[0] - centres(b[None])[0]) <= self.cfg.gate * self.cfg.frame_size[0])
 
 
 
@@ -127,12 +150,44 @@ class StateEstimator:
         self.t_ns = None                            # time of the last match
 
 
-    def update(self, box, new, t_ns):
+    def measure(self, box):
+        c = centres(box[None])[0]
+        return np.array([c[0] - self.half[0], self.half[1] - c[1]]) / self.half     # + right, + up
+
+
+    def predict(self, t_ns):
+        return self.pos + self.vel * ((t_ns - self.t_ns) / 1e9)
+
+
+    def predicted_box(self, box, t_ns):
+        """box moved so its centre is where the target is expected at t_ns"""
+        p = self.predict(t_ns)
+        c = np.array([self.half[0] * (1 + p[0]), self.half[1] * (1 - p[1])]) - centres(box[None])[0]
+        out = box.copy()
+        out[[0, 2]] += c[0]
+        out[[1, 3]] += c[1]
+        return out
+
+
+    def is_jump(self, box, t_ns):
+        """Whether box lies further off the predicted position than cfg.jump plus cfg.jump_speed times
+        the predicted motion since the last match"""
+        if self.pos is None:
+            return False
+        dt = (t_ns - self.t_ns) / 1e9
+        limit = self.cfg.jump * self.cfg.frame_size[0] + self.cfg.jump_speed * np.linalg.norm(self.vel * self.half) * dt
+        return bool(np.linalg.norm((self.measure(box) - self.predict(t_ns)) * self.half) > limit)
+
+
+    def update(self, box, new, t_ns, restart = None):
+        """restart = (box, t_ns) of a confirmed jump: start again from it and box, velocity from the two"""
         if box is not None:
-            c = centres(box[None])[0]
-            z = np.array([c[0] - self.half[0], self.half[1] - c[1]]) / self.half     # + right, + up
+            z = self.measure(box)
             if new or self.pos is None:
                 self.pos, self.vel = z, np.zeros(2, np.float32)
+            elif restart is not None:
+                dt = max((t_ns - restart[1]) / 1e9, 1e-3)
+                self.pos, self.vel = z, (z - self.measure(restart[0])) / dt
             else:
                 dt = max((t_ns - self.t_ns) / 1e9, 1e-3)
                 pred = self.pos + self.vel * dt
@@ -167,7 +222,17 @@ class Tracker:
 
     def update(self, dets):
         t = dets.frame.t_exposure_ns                # when the boxes were seen, not when they were ready
-        box, new = self.selector.select(dets.boxes, t)
-        obs = self.estimator.update(box, new, t)
+        sel, est = self.selector, self.estimator
+        predicted = est.predicted_box(sel.box, t) if sel.box is not None and not sel.new and est.pos is not None else None
+        box, new = sel.select(dets.boxes, t, predicted)
+        restart = None
+        if box is not None and not new and self.estimator.is_jump(box, t):
+            if sel.pending is not None and sel.same_object(sel.pending[0], box):
+                restart = sel.pending               # two boxes agree: the target really moved
+            else:
+                sel.pending, box = (box, t), None   # hold it back; this frame counts as missed
+        if box is not None:
+            sel.accept(box, t)
+        obs = self.estimator.update(box, new, t, restart)
         obs.frame_id, obs.t_exposure_ns = dets.frame.frame_id, t
         return obs

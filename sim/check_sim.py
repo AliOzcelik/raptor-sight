@@ -16,7 +16,7 @@ from perception.target import Tracker, TrackerConfig
 from sim.config import SimConfig
 from sim.core import BatchSim
 from sim.env import PanTiltEnv
-from sim.obs import BatchEstimator, OBS_NAMES
+from sim.obs import BASE_NAMES, DE_SCALE, BatchEstimator, from_tracker, obs_names
 
 
 def check_tracker(n_frames = 3000, seed = 0):
@@ -24,17 +24,27 @@ def check_tracker(n_frames = 3000, seed = 0):
     rng = np.random.default_rng(seed)
     cfg = TrackerConfig()
     ref, est = Tracker(cfg), BatchEstimator(1, cfg)
-    c, t, worst = np.array([320.0, 180.0]), 0, 0.0
+    c, v, t, worst = np.array([320.0, 180.0]), np.zeros(2), 0, 0.0
     gap = 0
     for k in range(n_frames):
         t += int(1e9 / 60) * (2 if rng.random() < 0.02 else 1)
-        c = (c + rng.normal(0, 4, 2)).clip(40, [600, 320])
+        if rng.random() < 0.02:                          # fast phases (a ball), up to 40 px per frame ...
+            v = rng.uniform(-40, 40, 2) * (rng.random() < 0.6)
+        if rng.random() < 0.03:                          # ... that bounce back
+            v = -v
+        c = c + v + rng.normal(0, 4, 2)
+        v[(c < 40) | (c > [600, 320])] *= -1
+        c = c.clip(40, [600, 320])
         if gap == 0 and rng.random() < 0.02:
             gap = int(rng.choice([2, 10, 25, 40]))      # short and longer than lose_after_s
         jump = rng.random() < 0.01                       # a box far away: must not match
+        if rng.random() < 0.01:                          # the target really jumps (confirmed by the next box)
+            c = (c + rng.uniform(40, 80, 2) * rng.choice([-1, 1], 2)).clip(40, [600, 320])
+        outlier = rng.random() < 0.03                    # one wrong box inside the gate: held back, then dropped
         found = gap == 0
         gap = max(0, gap - 1)
-        cc = c + (rng.uniform(150, 250, 2) * rng.choice([-1, 1], 2) if jump else 0)
+        cc = c + (rng.uniform(150, 250, 2) * rng.choice([-1, 1], 2) if jump else 0) \
+               + (rng.uniform(25, 65, 2) * rng.choice([-1, 1], 2) if outlier else 0)
         box = np.array([[cc[0] - 30, cc[1] - 40, cc[0] + 30, cc[1] + 40]])
         dets = SimpleNamespace(frame = SimpleNamespace(t_exposure_ns = t, frame_id = k),
                                boxes = np.column_stack([box, [[0.9, 0]]]).astype(np.float32) if found
@@ -48,18 +58,42 @@ def check_tracker(n_frames = 3000, seed = 0):
     assert worst < 1e-3
 
 
+def check_obs(cfg, seed = 0):
+    """The observation's action history holds the actions just sent, newest first, and from_tracker()
+    (the Pi's path) builds the same vector as the simulator"""
+    sim = BatchSim(4, cfg, seed = seed)
+    names = obs_names(cfg.action_history)
+    rng = np.random.default_rng(seed)
+    sent = []
+    for _ in range(cfg.action_history + 2):
+        a = rng.uniform(-1, 1, (4, 2))
+        obs, *_ = sim.step(a)
+        sent.insert(0, a)
+    hist = obs[:, len(BASE_NAMES):].reshape(4, cfg.action_history, 2)
+    assert np.allclose(hist, np.stack(sent[:cfg.action_history], axis = 1), atol = 1e-6), "action history out of step"
+    o = obs[0]
+    tr = SimpleNamespace(e_x = o[0], e_y = o[1], de_x = o[2] / DE_SCALE, de_y = o[3] / DE_SCALE, w = o[4], h = o[5],
+                         valid = bool(o[8]), t_lost = o[9])
+    s = cfg.servo
+    pi = from_tracker(tr, hist[0], sim.cmd[0], s.pan_limits, s.tilt_limits)
+    assert np.allclose(pi, o, atol = 1e-5), "from_tracker differs from the simulator"
+    print(f"observation: {len(names)} features ({len(BASE_NAMES)} + last {cfg.action_history} actions), newest action"
+          f" = the one just sent, from_tracker() matches")
+
+
 def servo_step(cfg):
     """Command a 30 deg pan step with nominal parameters; time until the camera reaches 90 %"""
     sim = BatchSim(1, dataclasses.replace(cfg, difficulty = 0.0), seed = 1)
     sim.out[:] = sim.motor[:] = sim.cmd[:] = sim.cmd_eff[:] = sim.latched[:] = sim.pending[:] = 0.0
     a = np.array([[1.0, 0.0]])
+    steps = int(round(30.0 / cfg.servo.max_step_deg))  # full-speed steps that add up to 30 deg
     t, hist = 0, []
     for k in range(60):
-        sim.step(a if k < 10 else np.zeros((1, 2)))      # 10 steps of +3 deg
+        sim.step(a if k < steps else np.zeros((1, 2)))
         hist.append((sim.t[0], sim.out[0, 0]))
     hist = np.array(hist)
     t90 = hist[np.argmax(hist[:, 1] >= 27.0), 0]
-    print(f"servo: 30 deg commanded over 10 steps ({10 / 60 * 1e3:.0f} ms); camera at 90 % after {t90 * 1e3:.0f} ms,"
+    print(f"servo: 30 deg commanded over {steps} steps ({steps / 60 * 1e3:.0f} ms); camera at 90 % after {t90 * 1e3:.0f} ms,"
           f" final {hist[-1, 1]:.2f} deg (backlash, deadband and quantization keep it off 30.00)")
 
 
@@ -74,7 +108,7 @@ def run_policy(cfg, policy, n = 256, seconds = 20.0, seed = 0):
         in_frame.append(info["in_frame"])
         rew.append(r)
         lat.append(sim.last["latency"].copy())
-        valid.append(obs[:, OBS_NAMES.index("valid")])
+        valid.append(obs[:, BASE_NAMES.index("valid")])
         done_term += term.sum()
         obs = sim.reset(term | trunc)
     err, in_frame = np.array(err), np.array(in_frame)
@@ -97,6 +131,7 @@ def main():
     check_env(PanTiltEnv(cfg), skip_render_check = True)
     print("gymnasium check_env: ok")
     check_tracker()
+    check_obs(cfg)
     servo_step(cfg)
 
     print("\n20 s on 256 envs (finished envs restart):")

@@ -63,8 +63,8 @@ perceive (camera + Hailo detector) → observe (bbox error) → policy (MLP) →
 
 ### Component responsibilities
 
-1. **Perception:** Hailo-10H runs the object detector and returns bounding boxes. The target can be any object class (not fixed yet).
-2. **State estimation:** Selects the target box, normalizes it, computes error and error velocity, and flags missing detections.
+1. **Perception:** Hailo-10H runs the object detector and returns bounding boxes. The target can be any object class the detector knows, requested by class. Current targets: **people and balls**, slow or fast, in a room (1–5 m).
+2. **State estimation:** Selects the target box (only the requested classes), follows it by matching against its predicted position, normalizes it, computes error and error velocity, and flags missing detections.
 3. **Policy:** A small MLP maps the observation to pan/tilt commands. It runs at camera frame rate (~30 Hz).
 4. **Actuation:** Converts normalized actions into servo pulse widths, with angle limits and rate limits as a safety layer.
 
@@ -81,17 +81,17 @@ All values normalized to roughly `[-1, 1]`.
 | `e_x, e_y` | Target center error from image center, normalized by half-width/height |
 | `ė_x, ė_y` | Error velocity (finite difference, filtered) |
 | `w, h` | Normalized bbox size (proxy for distance and speed in image space) |
-| `a_{t-1}` | Previous action (both axes), helps the policy learn smoothness and compensate latency |
 | `θ_pan, θ_tilt` | Commanded servo angles (MG90S has no encoder feedback) |
 | `valid` | 1 if a detection exists this frame, else 0 |
 | `t_lost` | Normalized time since last valid detection |
+| `a_{t-1} … a_{t-6}` | The last 6 actions (both axes), newest first. The newest lets the policy judge the smoothness penalty; the older ones are the turns still under way when the frame was taken |
 
-A short **frame stack** (e.g. last 3 observations) is optional and helps under latency.
+**Why 6 actions:** a command takes about 5 frames to show in the measured error (observation latency, PWM frame, servo lag). Measured in the simulator, a linear fit of the true current error from the observation improves from 10.0 to 6.6 px (nominal parameters) when actions 3–5 steps back are added, and stops improving after 6. A **frame stack** of past errors helps less than the action history and adds nothing on top of it, so it is not used. The count is `SimConfig.action_history`.
 
 ### 3.2 Action
 
 - Continuous, 2-D: `a ∈ [-1, 1]²`.
-- Interpreted as **angular velocity / delta-angle commands** per step, scaled by a max rate (e.g. ±X°/step).
+- Interpreted as **angular velocity / delta-angle commands** per step, scaled by a max rate: ±6°/step, i.e. 360 °/s at 60 fps, fast enough for kicked and thrown balls.
 - Final command is clipped to mechanical limits and passed through a rate limiter.
 
 ### 3.3 Reward
@@ -105,6 +105,9 @@ r = − w_e · ‖e‖²            (centering)
 ```
 
 The smoothness term is essential: without it, policies learn bang-bang behavior that looks fine in sim and destroys servos in real life.
+
+- **Error units:** in the reward, `e` is measured in half frame *widths* on both axes, so a pixel (and a degree) of error costs the same horizontally and vertically. The centred bonus is a circle of radius `ε` (16 px at ε = 0.05). The observation keeps `e_y` per half frame *height*, so the frame edge is at ±1 on both axes there.
+- **Failure penalty:** when an episode fails (§3.4), it gets a one-time penalty of `w_l / (1 − γ)`, which is being lost forever, discounted. The evaluation counts the rest of a failed episode as lost, so training and evaluation price a failure the same. `γ` lives in the reward settings and is the discount the RL agent must use.
 
 ### 3.4 Termination / truncation
 
@@ -122,9 +125,9 @@ A lightweight, analytic, **bbox-level** simulator, Gymnasium-compatible and vect
 1. **Pan-tilt kinematics:** two revolute joints with angle limits.
 2. **Servo dynamics:** first-order lag, max slew rate, deadband, backlash, quantization.
 3. **Camera model:** pinhole projection with configurable FOV and resolution; target world position → pixel coordinates and bbox size.
-4. **Target trajectories:** random walk, sinusoidal, sudden direction changes, acceleration bursts, stop-and-go, temporary occlusion.
+4. **Target trajectories:** one target kind per episode. People: random walk, sinusoidal (pacing), sudden direction changes, acceleration bursts (sprints), stop-and-go. Balls: kicks (instant direction changes), rolling with friction, throws under gravity that bounce. Both: still targets, temporary occlusion. Speeds are in m/s, so near targets sweep faster.
 5. **Latency pipeline:** queues that delay both observations and actions (camera exposure + inference + communication + actuation).
-6. **Detector noise model:** Gaussian jitter on bbox center/size, false negatives (dropout), occasional false positives, FPS jitter.
+6. **Detector noise model:** Gaussian jitter on bbox center/size, false negatives (dropout, higher for balls), occasional false positives, FPS jitter, motion blur (the box stretches along the streak; long streaks are missed).
 
 ### 4.2 Optional upgrades
 
@@ -146,7 +149,8 @@ Randomized per episode:
 | Detection noise, dropout rate | Real detectors flicker, especially on small/fast targets |
 | FPS jitter | Inference time is not constant |
 | Camera FOV, mounting offset | Calibration error |
-| Target speed / trajectory family | Generalization to unseen motion |
+| Target kind (person, ball), size, speed / trajectory family | Generalization to unseen objects and motion. The policy is not told the kind (one policy for any requested object); the critic is |
+| Exposure time (motion blur) | Fast balls blur; detection depends on the exposure |
 
 ### 5.2 System identification
 

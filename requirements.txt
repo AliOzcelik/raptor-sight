@@ -47,10 +47,7 @@ gymnasium==1.2.2
 # ---------------------------------------------------------------------------------------
 # 4. Later phases (uncomment when that phase starts)
 # ---------------------------------------------------------------------------------------
-# RL training (Phases 3-5):
-# torch
-# stable-baselines3
-# tensorboard
+# RL training (Phases 3-5) runs on a Mac or a CUDA PC, not on the Pi: see requirements-train.txt
 #
 # Policy export and runtime on the Pi (Phase 6):
 # onnx

@@ -3,14 +3,13 @@
 For many envs at once, use sim.core.BatchSim directly and reset finished envs with reset(done).
 """
 
-import cv2
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
 from sim.config import SimConfig
 from sim.core import BatchSim
-from sim.obs import OBS_NAMES
+from sim.obs import obs_names
 
 
 class PanTiltEnv(gym.Env):
@@ -20,7 +19,7 @@ class PanTiltEnv(gym.Env):
         self.cfg = cfg or SimConfig()
         self.render_mode = render_mode
         self.sim = BatchSim(1, self.cfg)
-        self.observation_space = spaces.Box(-1.0, 1.0, (len(OBS_NAMES),), np.float32)
+        self.observation_space = spaces.Box(-1.0, 1.0, (len(obs_names(self.cfg.action_history)),), np.float32)
         self.action_space = spaces.Box(-1.0, 1.0, (2,), np.float32)
         self.info = {}
 
@@ -46,6 +45,7 @@ class PanTiltEnv(gym.Env):
 
     def render(self):
         """Camera view: true target box (green), detector box (yellow, when found), tracker estimate (red)"""
+        import cv2      # only needed for rendering, so training machines can do without OpenCV
         s, W, H = self.sim, self.sim.W, self.sim.H
         img = np.full((H, W, 3), 40, np.uint8)
         cv2.drawMarker(img, (W // 2, H // 2), (255, 255, 255), cv2.MARKER_CROSS, 20, 1)
@@ -70,4 +70,5 @@ class PanTiltEnv(gym.Env):
 
     def close(self):
         if self.render_mode == "human":
+            import cv2
             cv2.destroyWindow("sim")

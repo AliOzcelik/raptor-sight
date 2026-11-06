@@ -6,7 +6,7 @@
 
 ## Goal
 
-The project builds a camera on a two-axis pan-tilt mount that keeps a detected object centred in the frame. The target can be any object the detector knows; there is no fixed class.
+The project builds a camera on a two-axis pan-tilt mount that keeps a detected object centred in the frame. The target can be any object the detector knows, chosen or requested by class; the current targets are people and balls, moving slowly or fast in a room.
 
 Instead of a hand-tuned controller, the mount is steered by a small neural network policy trained with reinforcement learning entirely in a simulator. The policy is then moved to the real hardware with little or no real-world training. To get there, the simulator models the parts where simulation and reality usually differ: latency, servo imperfections and detector noise. These values are randomized during training and calibrated against measurements from the real system.
 
@@ -64,13 +64,14 @@ Main findings:
 - exposure, gain and latency;
 - boxes in pixels, and pan/tilt angles of the box centres. The angles use the FOV from the camera datasheet, which hasn't been calibrated yet.
 
-The tracker is connected to it, with a display, click-to-lock and CSV logging. A 57-second live run logged 60 fps with no skipped frames and a latency of 38.4 ms median / 42.8 ms 99th percentile, from mid-exposure to the tracker's output.
+The tracker is connected to it, with a display, click-to-lock, a class filter (`--target person`, `--target "sports ball"`) and CSV logging. For fast balls, use a short fixed exposure (`--exposure-us`, e.g. 4000) against motion blur. A 57-second live run logged 60 fps with no skipped frames and a latency of 38.4 ms median / 42.8 ms 99th percentile, from mid-exposure to the tracker's output.
 
 ### 3. Target tracking
 `perception/target.py` turns each frame's boxes into the controller's input:
-- **Target selection:** picks one box (the one closest to the centre, or a clicked one) and keeps following the same object by overlap and class.
-- **State estimation:** an alpha-beta filter gives the error velocity from the camera timestamps, so skipped frames are handled correctly.
+- **Target selection:** picks one box of the requested classes (the one closest to the centre, or a clicked one) and keeps following the same object by overlap and class. It matches each new box against where the target is predicted to be (fast balls move 30–60 px per frame), and also against where it was last seen (a ball that bounced back).
+- **State estimation:** an alpha-beta filter gives the error velocity from the camera timestamps, so skipped frames are handled correctly. Its gains (0.8 / 0.5) are fast enough for kicked and thrown balls, tested in the simulator.
 - **Lost targets:** while the target is missing, it predicts the position and reports how long it has been lost.
+- **Jumps:** a box too far from the prediction is held back until a second box confirms it, so one wrong box can't take over the lock or kick the velocity estimate. "Too far" is 32 px plus twice the predicted motion since the last match, so a ball bouncing back is not mistaken for a jump.
 
 `perception/analyze_track.py` summarizes the tracking logs: timing, dropouts, target switches, detector jitter, and velocity error and lag.
 
@@ -80,14 +81,14 @@ The tracker is connected to it, with a display, click-to-lock and CSV logging. A
 | Part | What's simulated |
 |---|---|
 | Pan-tilt | Two joints with angle limits |
-| Servos | Command delay, 20 ms PWM frames, quantization, deadband, first-order lag, slew limit, backlash |
+| Servos | Command delay, 20 ms PWM frames, quantization, deadband, first-order lag, slew limit, backlash. Commands up to 360 °/s (6° per frame) |
 | Camera | Pinhole projection with a mounting offset |
-| Targets | Six motion types (still, random walk, sinusoid, direction changes, bursts, stop-and-go), plus occlusions |
-| Detector | Box jitter, size noise, missed and false detections, minimum size, clipping at the frame edge |
-| Latency | Measured from the real system, with jitter and skipped frames |
+| Targets | People or balls at 1–5 m (a room), one kind per episode. People: 0.2–3 m/s, walking to running, with sprints; still, random walk, pacing, direction changes, bursts, stop-and-go. Balls: 0.065–0.25 m, 0.5–10 m/s; still, kicks, rolling with friction, throws under gravity that bounce. Plus occlusions |
+| Detector | Box jitter, size noise, missed and false detections (balls are missed more often), minimum size, clipping at the frame edge, motion blur (the box stretches along the streak, and long streaks are missed) |
+| Latency | Measured from the real system, with jitter and skipped frames. Frames are exposed on a regular sensor clock and results arrive in order, as on the Pi |
 | Tracker | An exact copy of the tracker running on the Pi |
 
-The observation, reward and termination follow PROJECT.md. All 26 parameters are randomized per episode, with one difficulty setting for a curriculum. Privileged state for an asymmetric critic is also provided.
+The observation, reward and termination follow PROJECT.md: the policy sees the tracker's output plus its last 6 actions, the reward weighs pan and tilt error equally per pixel, and a failed episode gets a penalty equal to staying lost. All 27 parameters are randomized per episode (size, speed and miss rate per target kind), with one difficulty setting for a curriculum. Privileged state for an asymmetric critic is also provided.
 
 Latency, frame rate, detector noise and dropouts are based on measurements from the real system. The servo parameters are MG90S estimates.
 
@@ -95,19 +96,21 @@ The simulator runs at about 106,000 environment-steps per second with 1024 envir
 
 ### 5. PID baseline (in simulation)
 `eval/` contains:
-- **`pid.py`:** a per-axis PID controller with anti-windup and lost-target handling, using only the information available on the real system.
-- **`evaluate.py`:** fixed test scenarios and the evaluation metrics.
-- **`tune_pid.py`:** a gain search in the simulator.
+- **`pid.py`:** a per-axis PID controller with anti-windup and lost-target handling, using only the information available on the real system. While following the tracker's prediction of a lost target, it subtracts the turn it has already commanded.
+- **`evaluate.py`:** fixed test scenarios and the evaluation metrics: 512 episodes per scenario, with 95% confidence intervals. All controllers see exactly the same episodes, and `compare()` pairs them for a direct A-vs-B difference.
+- **`tune_pid.py`:** a gain search in the simulator over kp, ki, kd, the integral limit and the lost-target follow time.
 
-Tuned gains: kp 0.188, ki 0.112, kd 0. On held-out test scenarios:
+Tuned gains: kp 0.256, ki 0.561, kd 0.014, integral limit 0.89°, follow time 0.08 s. On held-out test scenarios (people and balls, 512 episodes each):
 
 | Controller | Mean score | Step test settling time |
 |---|---|---|
-| No action | −0.700 | does not settle |
-| P controller (gain 0.3) | −0.236 | 1.05 s |
-| **Tuned PID** | **−0.084** | **0.40 s** |
+| No action | −0.794 ± 0.004 | does not settle |
+| P controller (gain 0.3) | −0.122 ± 0.005 | 0.98 s |
+| **Tuned PID** | **−0.046 ± 0.005** | **1.00 s** |
 
-With nominal parameters, the tuned PID keeps the target within about 4–11 px and never loses it. With full randomization, it fails 9–50% of the 20-second episodes, depending on the motion type. This is the baseline the RL policy has to beat.
+Paired over the same episodes, the tuned PID beats the P controller by +0.076 ± 0.004. With nominal parameters, it never loses a target and keeps it within about 8–16 px (people) and 11–27 px (balls). With full randomization, it fails 9–21% of the 20-second episodes with moving people and 34–49% with balls, depending on the motion type; a controller with perfect information fails none of them. This is the baseline the RL policy has to beat.
+
+The tuner maximizes the reward over all scenarios; settling time is not part of it.
 
 ## Repository layout
 
@@ -117,6 +120,7 @@ perception/
   target.py          target selection and state estimation
   analyze_track.py   tracking log analysis
 raspberrypi_camera.py  live detection and tracking on the Pi
+requirements.txt     Pi packages; requirements-train.txt for the training machine (Mac or CUDA PC)
 sim/                 simulator (config, dynamics, trajectories, observation, Gymnasium env, checks)
 eval/                PID baseline, test scenarios, metrics, tuning, results
 test/                camera image check
