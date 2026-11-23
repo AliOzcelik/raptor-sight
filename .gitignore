@@ -25,3 +25,6 @@ track*.csv
 # Unfinished stub (the real tracker is perception/target.py)
 /target.py
 
+
+# Training runs (checkpoints, TensorBoard logs)
+rl/runs/
